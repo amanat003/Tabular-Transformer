@@ -2,198 +2,285 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tabular Transformer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; background: #f7f9fc; margin:0; padding:0; }
-    .container { max-width: 1000px; margin: 30px auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
-    h1 { text-align: center; color: #333; }
-    h3 { margin-top: 20px; color: #444; }
-    input, select { margin: 5px 0; padding: 8px; width: 200px; border: 1px solid #ccc; border-radius: 5px; }
-    button { margin: 10px 5px 10px 0; padding: 10px 18px; cursor: pointer; border: none; border-radius: 5px;
-             background-color: #4CAF50; color: white; font-weight: bold; transition: 0.3s; }
-    button:hover:not(:disabled) { background-color: #45a049; }
-    button:disabled { background-color: #cccccc; cursor: not-allowed; }
-    #status { color: red; margin-top: 10px; font-weight: bold; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; max-height: 300px; overflow-y: auto; display: block; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
-    th { background-color: #f2f2f2; position: sticky; top: 0; }
-    tr:hover { background-color: #f1f1f1; }
-    label { font-weight: bold; color: #333; }
-    .flex-row { display: flex; flex-wrap: wrap; align-items: center; gap: 15px; margin-bottom: 10px; }
-    .small-input { width: 100px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f7f9fc;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 6px;
+    }
+    input, button {
+      padding: 8px;
+      margin: 4px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 6px;
+      text-align: left;
+      font-size: 13px;
+    }
+    th {
+      background: #f0f0f0;
+    }
+    .status {
+      margin-top: 10px;
+      font-weight: bold;
+      color: #2a5d84;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Tabular Transformer</h1>
+    <h1>📊 Tabular Transformer</h1>
 
     <!-- Step 1: Upload -->
-    <div class="flex-row">
-      <label for="upload">1. Upload CSV or Excel File:</label>
-      <input type="file" id="upload" accept=".csv, .xlsx, .xls" />
+    <div class="section">
+      <label for="uploadInput">1. Upload CSV or Excel File:</label>
+      <input type="file" id="uploadInput" accept=".csv,.xlsx,.xls" />
     </div>
 
-    <!-- Step 2: Input Preview -->
-    <h3>Data Preview (Top 5 rows)</h3>
-    <table id="preview"></table>
-
-    <!-- Step 3: Fixed Columns -->
-    <div class="flex-row">
-      <label for="fixedColumns">2. Fixed Data Range:</label>
-      <input type="text" id="fixedColumns" placeholder="e.g., 1:3" disabled />
+    <!-- Step 2: Fixed Columns -->
+    <div class="section">
+      <label for="fixedColumns">2. Fixed Columns Range (e.g., 1:3):</label>
+      <input type="text" id="fixedColumns" placeholder="Start:End" disabled />
     </div>
 
-    <!-- Step 4: Repeat Group Size -->
-    <div class="flex-row">
-      <label for="repeatSize">3. Repeat Group Size:</label>
-      <input type="number" id="repeatSize" min="1" placeholder="e.g., 3" disabled />
+    <!-- Step 3: Repeat Size -->
+    <div class="section">
+      <label for="repeatSize">3. Repeat Group Size (e.g., 3, 4, 5,...):</label>
+      <input type="number" id="repeatSize" min="1" placeholder="Enter group size" disabled />
     </div>
 
-    <!-- Step 5: Repeat Columns Range -->
-    <div class="flex-row">
-      <label for="repeatRange">4. Repeat Columns Range:</label>
-      <input type="text" id="repeatRange" placeholder="e.g., 4:n" disabled />
+    <!-- Step 4: Repeat Range -->
+    <div class="section">
+      <label for="repeatRange">4. Repeat Columns Range (e.g., 4:n):</label>
+      <input type="text" id="repeatRange" placeholder="Start:End" disabled />
     </div>
 
-    <!-- Step 6: Optional Rename Repeated Columns -->
-    <div class="flex-row">
-      <label for="repeatRename">5. Rename Repeated Columns (comma-separated):</label>
-      <input type="text" id="repeatRename" placeholder="Optional: e.g., Brand, Category, Subcategory" disabled style="width:300px;" />
+    <!-- Step 5: Optional rename -->
+    <div class="section">
+      <label for="repeatNames">5. (Optional) Rename Repeat Group Columns (comma separated):</label>
+      <input type="text" id="repeatNames" placeholder="e.g. Qty,Price,Date" disabled />
     </div>
 
-    <!-- Step 7: Process -->
-    <button id="processBtn" disabled onclick="processData()">6. Process</button>
+    <!-- Action -->
+    <div class="section">
+      <button id="processBtn" disabled>Process Data</button>
+      <button id="downloadExcelBtn" disabled>Download Excel</button>
+      <button id="downloadCsvBtn" disabled>Download CSV</button>
+      <div class="status" id="status"></div>
+    </div>
 
-    <!-- Step 8: Output Preview -->
-    <h3>Processed Data Preview (Top 5 rows)</h3>
-    <table id="outputPreview"></table>
+    <!-- Input Preview -->
+    <div class="section">
+      <h3>📥 Input Preview (Top 5 Rows)</h3>
+      <div id="inputPreview"></div>
+      <div id="inputInfo" class="status"></div>
+    </div>
 
-    <!-- Step 9: Download -->
-    <button id="downloadExcelBtn" disabled onclick="downloadExcel()">Download Excel</button>
-    <button id="downloadCsvBtn" disabled onclick="downloadCSV()">Download CSV</button>
-
-    <p id="status"></p>
+    <!-- Output Preview -->
+    <div class="section">
+      <h3>📤 Output Preview (Top 5 Rows)</h3>
+      <div id="outputPreview"></div>
+      <div id="outputInfo" class="status"></div>
+    </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
-    let rawData = null;
-    let processedData = null;
-    let fixedColumns = null;
-
-    const uploadInput = document.getElementById("upload");
+    const uploadInput = document.getElementById("uploadInput");
     const fixedColumnsInput = document.getElementById("fixedColumns");
     const repeatSizeInput = document.getElementById("repeatSize");
     const repeatRangeInput = document.getElementById("repeatRange");
-    const repeatRenameInput = document.getElementById("repeatRename");
+    const repeatNamesInput = document.getElementById("repeatNames");
     const processBtn = document.getElementById("processBtn");
     const status = document.getElementById("status");
+    const inputInfo = document.getElementById("inputInfo");
+    const outputInfo = document.getElementById("outputInfo");
 
-    uploadInput.addEventListener("change", function(event){
-      const file = event.target.files[0];
-      if(!file) return;
+    let rawData = [];
+    let processedData = [];
+
+    uploadInput.addEventListener("change", handleFileUpload);
+    processBtn.addEventListener("click", processData);
+
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
       const reader = new FileReader();
-      reader.onload = function(e){
-        const wb = XLSX.read(e.target.result, { type: 'binary' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        rawData = XLSX.utils.sheet_to_json(ws, { header: 1 }).filter(r => r.some(c => c));
+      const ext = file.name.split(".").pop().toLowerCase();
 
-        // Enable inputs
+      reader.onload = function(event) {
+        let data;
+        if (ext === "csv") {
+          const rows = event.target.result.split(/\r?\n/).map(r => r.split(","));
+          data = rows.filter(r => r.length > 1);
+        } else {
+          const wb = XLSX.read(event.target.result, { type: "binary" });
+          data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+        }
+        rawData = data.filter(r => r.length > 0);
+
+        previewDataWithCols(rawData, "inputPreview");
+        inputInfo.textContent = `Rows: ${rawData.length}, Columns: ${rawData[0].length}`;
+
         fixedColumnsInput.disabled = false;
         repeatSizeInput.disabled = false;
         repeatRangeInput.disabled = false;
-        repeatRenameInput.disabled = false;
+        repeatNamesInput.disabled = false;
         processBtn.disabled = false;
-
-        previewData(rawData, "preview");
-        status.textContent = "";
+        status.textContent = "File loaded successfully!";
       };
-      reader.readAsBinaryString(file);
-    });
 
-    function previewData(data, tableId){
-      const table = document.getElementById(tableId);
-      table.innerHTML = "";
-      if(!data || data.length === 0) return;
+      if (ext === "csv") reader.readAsText(file);
+      else reader.readAsBinaryString(file);
+    }
 
-      const headerRow = document.createElement("tr");
-      data[0].forEach((val)=> {
+    function previewDataWithCols(data, elementId) {
+      if (!data || data.length === 0) return;
+      const table = document.createElement("table");
+      const preview = data.slice(0, 5);
+
+      // First row: column numbers
+      const colNums = document.createElement("tr");
+      colNums.appendChild(document.createElement("th")).textContent = "#";
+      for (let i = 0; i < preview[0].length; i++) {
         const th = document.createElement("th");
-        th.textContent = val || "";
-        headerRow.appendChild(th);
-      });
-      table.appendChild(headerRow);
+        th.textContent = i + 1;
+        colNums.appendChild(th);
+      }
+      table.appendChild(colNums);
 
-      data.slice(1,6).forEach(row => {
+      // Then data rows
+      preview.forEach((row, i) => {
         const tr = document.createElement("tr");
+        tr.appendChild(document.createElement("td")).textContent = i + 1;
         row.forEach(cell => {
           const td = document.createElement("td");
-          td.textContent = cell || "";
+          td.textContent = cell;
           tr.appendChild(td);
         });
         table.appendChild(tr);
       });
+
+      document.getElementById(elementId).innerHTML = "";
+      document.getElementById(elementId).appendChild(table);
     }
 
-    function parseRange(range){
+    function parseRange(range) {
       const parts = range.split(":");
-      if(parts.length!==2) return null;
-      const start = parseInt(parts[0])-1;
-      const end = parts[1].trim().toLowerCase()==="n" ? rawData[0].length-1 : parseInt(parts[1])-1;
-      return {start,end};
+      if (parts.length !== 2) return null;
+      const start = parseInt(parts[0]) - 1;
+      const end = parts[1].trim().toLowerCase() === "n" ? rawData[0].length - 1 : parseInt(parts[1]) - 1;
+      return { start, end };
     }
 
-    function processData(){
-      fixedColumns = parseRange(fixedColumnsInput.value);
-      if(!fixedColumns){status.textContent="Invalid fixed column range."; return;}
+    function processData() {
+      const fixedColumns = parseRange(fixedColumnsInput.value);
+      if (!fixedColumns) { status.textContent = "Invalid fixed column range."; return; }
 
       const repeatGroupSize = parseInt(repeatSizeInput.value);
-      if(!repeatGroupSize || repeatGroupSize<1){status.textContent="Invalid repeat group size."; return;}
+      if (!repeatGroupSize || repeatGroupSize < 1) { status.textContent = "Invalid repeat group size."; return; }
 
       const repeatColumns = parseRange(repeatRangeInput.value);
-      if(!repeatColumns){status.textContent="Invalid repeat columns range."; return;}
+      if (!repeatColumns) { status.textContent = "Invalid repeat columns range."; return; }
 
-      const renameCols = repeatRenameInput.value.split(",").map(s=>s.trim()).filter(s=>s);
+      const customNames = repeatNamesInput.value.split(",").map(s => s.trim()).filter(Boolean);
 
       processedData = [];
-      const headers = [...rawData[0].slice(fixedColumns.start,fixedColumns.end+1)];
-      for(let i=0;i<repeatGroupSize;i++){
-        headers.push(renameCols[i]||`Group${i+1}`);
+      const headers = [...rawData[0].slice(fixedColumns.start, fixedColumns.end+1)];
+      for (let i = 0; i < repeatGroupSize; i++) {
+        headers.push(customNames[i] || "Group" + (i+1));
       }
       processedData.push(headers);
 
-      rawData.slice(1).forEach(row=>{
-        const fixedPart = row.slice(fixedColumns.start,fixedColumns.end+1);
-
-        for(let i=repeatColumns.start;i<=repeatColumns.end;i+=repeatGroupSize){
-          const group = row.slice(i,i+repeatGroupSize);
-          if(group.length===0) continue;
-          processedData.push([...fixedPart,...group]);
+      rawData.slice(1).forEach(row => {
+        const fixedPart = row.slice(fixedColumns.start, fixedColumns.end+1);
+        for (let i = repeatColumns.start; i <= repeatColumns.end; i += repeatGroupSize) {
+          const group = row.slice(i, i + repeatGroupSize);
+          if (group.length === 0 || group.every(v => v === "")) continue;
+          processedData.push([...fixedPart, ...group]);
         }
       });
 
-      previewData(processedData,"outputPreview");
-      document.getElementById("downloadExcelBtn").disabled=false;
-      document.getElementById("downloadCsvBtn").disabled=false;
-      status.textContent="Processed successfully!";
+      previewData(processedData, "outputPreview");
+      outputInfo.textContent = `Rows: ${processedData.length}, Columns: ${processedData[0].length}`;
+      document.getElementById("downloadExcelBtn").disabled = false;
+      document.getElementById("downloadCsvBtn").disabled = false;
+      status.textContent = "Processed successfully!";
     }
 
-    function downloadExcel(){
+    function previewData(data, elementId) {
+      if (!data || data.length === 0) return;
+      const table = document.createElement("table");
+      const preview = data.slice(0, 5);
+      preview.forEach(row => {
+        const tr = document.createElement("tr");
+        row.forEach(cell => {
+          const td = document.createElement("td");
+          td.textContent = cell;
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+      document.getElementById(elementId).innerHTML = "";
+      document.getElementById(elementId).appendChild(table);
+    }
+
+    document.getElementById("downloadExcelBtn").addEventListener("click", () => {
       const ws = XLSX.utils.aoa_to_sheet(processedData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Processed");
-      XLSX.writeFile(wb,"processed_data.xlsx");
-    }
+      XLSX.writeFile(wb, "processed.xlsx");
+    });
 
-    function downloadCSV(){
-      const csv = processedData.map(r=>r.map(v=>`"${v||""}"`).join(",")).join("\n");
-      const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"});
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download="processed_data.csv";
-      link.click();
-    }
+    document.getElementById("downloadCsvBtn").addEventListener("click", () => {
+      const ws = XLSX.utils.aoa_to_sheet(processedData);
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "processed.csv";
+      a.click();
+    });
   </script>
 </body>
 </html>
