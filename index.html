@@ -176,12 +176,12 @@
   function categorizeItem(itemRaw) {
     const item = (itemRaw || '').toString().trim().toLowerCase();
     if (!item) return '';
-    if (/(^|\s|\/)atta($|\s|,|\.)|maida|semolina/.test(item)) return 'Flour';
-    if (item.includes('lentil')) return 'Lentil';
-    if (item.includes('mustard oil')) return 'Mustard Oil';
-    if (item.includes('puffed rice')) return 'Puffed Rice';
-    if (/rice chinigura|rice others/.test(item)) return 'Rice';
-    if (item.includes('salt')) return 'Salt';
+    if (/(^|\s|\/)Atta($|\s|,|\.)|Maida|Semolina/.test(item)) return 'Flour';
+    if (item.includes('Lentil')) return 'Lentil';
+    if (item.includes('Mustard oil')) return 'Mustard Oil';
+    if (item.includes('Puffed rice')) return 'Puffed Rice';
+    if (/Rice chinigura|Rice others/.test(item)) return 'Rice';
+    if (item.includes('Salt')) return 'Salt';
     return '';
   }
 
