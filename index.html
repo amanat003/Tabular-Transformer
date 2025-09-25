@@ -1,248 +1,409 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Tabular Transformer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; background: #f7f9fc; margin:0; padding:0; }
-    .container { max-width: 1100px; margin: 30px auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
-    h1 { text-align: center; color: #333; }
-    h3 { margin-top: 20px; color: #444; }
-    input, select { margin: 5px 0; padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
-    button { margin: 10px 5px 10px 0; padding: 10px 18px; cursor: pointer; border: none; border-radius: 5px;
-             background-color: #4CAF50; color: white; font-weight: bold; transition: 0.3s; }
-    button:hover:not(:disabled) { background-color: #45a049; }
-    button:disabled { background-color: #cccccc; cursor: not-allowed; }
-    #status { color: red; margin-top: 10px; font-weight: bold; }
-    #summary, #inputSummary { color: #333; margin-top: 10px; font-weight: bold; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; max-height: 300px; overflow-y: auto; display: block; }
-    th, td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 13px; }
-    th { background-color: #f2f2f2; position: sticky; top: 0; }
-    tr:hover { background-color: #f1f1f1; }
-    label { font-weight: bold; color: #333; }
-    .flex-row { display: flex; flex-wrap: wrap; align-items: center; gap: 15px; margin-bottom: 10px; }
+    :root{--bg:#f6f9fc;--card:#fff;--accent:#2b8cc4;--ok:#4CAF50}
+    body{font-family:Inter,Arial,Helvetica,sans-serif;margin:0;background:var(--bg);color:#222}
+    .container{max-width:1100px;margin:32px auto;background:var(--card);padding:22px;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,0.08)}
+    h1{margin:0 0 12px;font-size:22px;color:#0f1724;text-align:center}
+    .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+    label{font-weight:600;color:#0f1724}
+    input[type="text"],input[type="number"],input[type="file"],select{padding:8px;border:1px solid #d1d5db;border-radius:8px}
+    button{background:var(--ok);color:white;padding:9px 14px;border-radius:8px;border:0;cursor:pointer;font-weight:700}
+    button[disabled]{background:#cfcfcf;cursor:not-allowed}
+    .drop-zone{border:2px dashed #cbd5e1;border-radius:10px;padding:18px;text-align:center;background:#fbfdff;color:#334155}
+    .drop-zone.dragover{background:#e6f2fb;border-color:var(--accent)}
+    table{width:100%;border-collapse:collapse;margin-top:10px;display:block;max-height:320px;overflow:auto}
+    th,td{border:1px solid #e6e9ef;padding:8px;text-align:left;font-size:13px;white-space:nowrap}
+    th{background:#f8fafc;position:sticky;top:0;z-index:2}
+    .meta{margin-top:8px;font-weight:600;color:#0f1724}
+    .controls {display:flex;gap:10px;flex-wrap:wrap}
+    .small{width:110px}
+    .wide{width:360px}
+    .success{color:var(--ok);font-weight:700}
+    .error{color:#dc2626;font-weight:700}
+    @media (max-width:720px){.row{flex-direction:column;align-items:stretch}.small{width:100%}.wide{width:100%}}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Tabular Transformer</h1>
 
-    <!-- Step 1: Upload -->
-    <div class="flex-row">
-      <label for="upload">1. Upload CSV or Excel File:</label>
-      <input type="file" id="upload" accept=".csv, .xlsx, .xls" />
+    <!-- Upload & Drag -->
+    <div class="row">
+      <div style="flex:1">
+        <div id="dropZone" class="drop-zone">
+          Drag & drop CSV / Excel here, or click to choose a file
+          <div style="margin-top:8px;font-size:13px;color:#475569">(supports quoted CSV — commas inside quotes stay in the same cell)</div>
+        </div>
+        <input id="fileInput" type="file" accept=".csv,.xlsx,.xls" style="margin-top:10px" />
+      </div>
+      <div style="min-width:220px">
+        <div style="margin-bottom:8px"><label>Input summary</label></div>
+        <div id="inputSummary" class="meta">No file loaded</div>
+      </div>
     </div>
 
-    <!-- Step 2: Input Preview -->
-    <h3>Data Preview (Top 5 rows)</h3>
-    <table id="preview"></table>
-    <p id="inputSummary"></p>
+    <!-- Options -->
+    <div class="row controls" style="margin-top:6px">
+      <div>
+        <label>Fixed columns (start:end)</label><br>
+        <input id="fixedColumns" class="small" type="text" placeholder="e.g. 1:3" disabled />
+      </div>
 
-    <!-- Step 3: Fixed Columns -->
-    <div class="flex-row">
-      <label for="fixedColumns">2. Fixed Data Range:</label>
-      <input type="text" id="fixedColumns" placeholder="e.g., 1:3" disabled />
+      <div>
+        <label>Repeat group size</label><br>
+        <input id="repeatSize" class="small" type="number" min="1" placeholder="e.g. 3" disabled />
+      </div>
+
+      <div>
+        <label>Repeat range (start:end)</label><br>
+        <input id="repeatRange" class="small" type="text" placeholder="e.g. 4:n" disabled />
+      </div>
+
+      <div style="flex:1">
+        <label>Rename repeated columns (comma separated, optional)</label><br>
+        <input id="repeatRename" class="wide" type="text" placeholder="e.g. Brand,Category,SKU" disabled />
+      </div>
+
+      <div style="min-width:220px">
+        <label style="display:block">&nbsp;</label>
+        <div>
+          <input id="addCategory" type="checkbox" disabled />
+          <label for="addCategory" style="font-weight:600">Add category column</label>
+        </div>
+      </div>
     </div>
 
-    <!-- Step 4: Repeat Group Size -->
-    <div class="flex-row">
-      <label for="repeatSize">3. Repeat Group Size:</label>
-      <input type="number" id="repeatSize" min="1" placeholder="e.g., 3" disabled />
+    <div class="row" style="margin-top:8px">
+      <button id="processBtn" disabled>Process</button>
+      <button id="downloadX" disabled>Download Excel</button>
+      <button id="downloadC" disabled>Download CSV</button>
+      <div id="status" style="margin-left:8px"></div>
     </div>
 
-    <!-- Step 5: Repeat Columns Range -->
-    <div class="flex-row">
-      <label for="repeatRange">4. Repeat Columns Range:</label>
-      <input type="text" id="repeatRange" placeholder="e.g., 4:n" disabled />
-    </div>
+    <!-- Previews -->
+    <h3 style="margin-top:18px">Input preview (top 5 rows)</h3>
+    <div id="inputPreview"></div>
 
-    <!-- Step 6: Optional Rename Repeated Columns -->
-    <div class="flex-row">
-      <label for="repeatRename">5. Rename Repeated Columns (comma-separated):</label>
-      <input type="text" id="repeatRename" placeholder="Optional: e.g., Brand, Category, SKU" disabled style="width:350px;" />
-    </div>
-
-    <!-- Step 7: Optional Category -->
-    <div class="flex-row">
-      <input type="checkbox" id="addCategory" disabled />
-      <label for="addCategory">6. Add Category Column (auto classify items)</label>
-    </div>
-
-    <!-- Step 8: Process -->
-    <button id="processBtn" disabled onclick="processData()">7. Process</button>
-
-    <!-- Step 9: Output Preview -->
-    <h3>Processed Data Preview (Top 5 rows)</h3>
-    <table id="outputPreview"></table>
-    <p id="summary"></p>
-
-    <!-- Step 10: Download -->
-    <button id="downloadExcelBtn" disabled onclick="downloadExcel()">Download Excel</button>
-    <button id="downloadCsvBtn" disabled onclick="downloadCSV()">Download CSV</button>
-
-    <p id="status"></p>
+    <h3 style="margin-top:18px">Output preview (top 5 rows)</h3>
+    <div id="outputPreview"></div>
+    <div id="outputSummary" class="meta" style="margin-top:6px"></div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
-    let rawData = null;
-    let processedData = null;
+  // --- state
+  let rawData = null;         // array of rows (each row is an array); first row = header
+  let processedData = null;   // processed aoa
 
-    const uploadInput = document.getElementById("upload");
-    const fixedColumnsInput = document.getElementById("fixedColumns");
-    const repeatSizeInput = document.getElementById("repeatSize");
-    const repeatRangeInput = document.getElementById("repeatRange");
-    const repeatRenameInput = document.getElementById("repeatRename");
-    const addCategoryInput = document.getElementById("addCategory");
-    const processBtn = document.getElementById("processBtn");
-    const status = document.getElementById("status");
-    const summary = document.getElementById("summary");
-    const inputSummary = document.getElementById("inputSummary");
+  // --- elements
+  const fileInput = document.getElementById('fileInput');
+  const dropZone = document.getElementById('dropZone');
+  const fixedColumnsInput = document.getElementById('fixedColumns');
+  const repeatSizeInput = document.getElementById('repeatSize');
+  const repeatRangeInput = document.getElementById('repeatRange');
+  const repeatRenameInput = document.getElementById('repeatRename');
+  const addCategoryCheckbox = document.getElementById('addCategory');
+  const processBtn = document.getElementById('processBtn');
+  const downloadX = document.getElementById('downloadX');
+  const downloadC = document.getElementById('downloadC');
+  const inputPreview = document.getElementById('inputPreview');
+  const outputPreview = document.getElementById('outputPreview');
+  const inputSummary = document.getElementById('inputSummary');
+  const statusEl = document.getElementById('status');
+  const outputSummary = document.getElementById('outputSummary');
 
-    uploadInput.addEventListener("change", function(event){
-      const file = event.target.files[0];
-      if(!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e){
-        const wb = XLSX.read(e.target.result, { type: 'binary' });
+  // --- drag & drop handlers
+  ;['dragenter','dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.classList.add('dragover');
+    });
+  });
+  ;['dragleave','drop'].forEach(evt => {
+    dropZone.addEventListener(evt, e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.classList.remove('dragover');
+    });
+  });
+  dropZone.addEventListener('drop', e => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) handleFile(f);
+  });
+
+  // --- file parsing using SheetJS (robust for CSV with quotes)
+  function handleFile(file){
+    clearStatus();
+    const name = file.name || 'file';
+    const ext = name.split('.').pop().toLowerCase();
+
+    const reader = new FileReader();
+    reader.onerror = () => showError('Unable to read file.');
+    reader.onload = (ev) => {
+      try {
+        let wb;
+        if (ext === 'csv' || ext === 'txt') {
+          // parse CSV as string so quoted cells keep commas
+          wb = XLSX.read(ev.target.result, { type: 'string' });
+        } else {
+          // excel binary
+          wb = XLSX.read(ev.target.result, { type: 'binary' });
+        }
         const ws = wb.Sheets[wb.SheetNames[0]];
-        rawData = XLSX.utils.sheet_to_json(ws, { header: 1 }).filter(r => r.some(c => c));
+        // header:1 gives array-of-arrays
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
+        // normalize rows (convert undefined to '')
+        const normalized = aoa.map(r => r.map(c => c === undefined || c === null ? '' : c));
+        // remove completely empty rows
+        rawData = normalized.filter(r => r.some(c => String(c).trim() !== ''));
+        if (!rawData || rawData.length === 0) {
+          showError('No data found in the file.');
+          return;
+        }
 
-        // Enable inputs
+        // enable controls
         fixedColumnsInput.disabled = false;
         repeatSizeInput.disabled = false;
         repeatRangeInput.disabled = false;
         repeatRenameInput.disabled = false;
-        addCategoryInput.disabled = false;
+        addCategoryCheckbox.disabled = false;
         processBtn.disabled = false;
 
-        previewData(rawData, "preview", true); // input preview with column numbers
-        inputSummary.textContent = `Input: ${rawData.length-1} rows × ${rawData[0].length} columns (excluding header).`;
-        status.textContent = "";
-      };
-      reader.readAsBinaryString(file);
+        // smart defaults
+        const cols = rawData[0].length;
+        fixedColumnsInput.value = cols <= 3 ? `1:${Math.max(1, cols-1)}` : '1:3';
+        repeatSizeInput.value = 3;
+        repeatRangeInput.value = `${Math.min(4, cols)}:n`;
+        repeatRenameInput.value = '';
+
+        // show input preview and summary
+        renderInputPreview();
+        inputSummary.textContent = `Input: ${Math.max(0, rawData.length - 1)} rows × ${rawData[0].length} columns (excluding header).`;
+        status(`${file.name} loaded`, 'success');
+        // reset previous output
+        outputPreview.innerHTML = '';
+        outputSummary.textContent = '';
+        downloadX.disabled = true;
+        downloadC.disabled = true;
+      } catch (err) {
+        console.error(err);
+        showError('Failed to parse file. Ensure it is valid CSV/Excel.');
+      }
+    };
+
+    // choose read mode
+    if (ext === 'csv' || ext === 'txt') reader.readAsText(file);
+    else reader.readAsBinaryString(file);
+  }
+
+  // --- preview input (show column numbers row + header + first 5 data rows)
+  function renderInputPreview(){
+    inputPreview.innerHTML = '';
+    if (!rawData || rawData.length === 0) return;
+    const table = document.createElement('table');
+
+    // column numbers row
+    const numberRow = document.createElement('tr');
+    rawData[0].forEach((_, i) => {
+      const th = document.createElement('th');
+      th.textContent = i + 1;
+      numberRow.appendChild(th);
+    });
+    table.appendChild(numberRow);
+
+    // header row (first row)
+    const headerRow = document.createElement('tr');
+    rawData[0].forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h || '';
+      headerRow.appendChild(th);
+    });
+    table.appendChild(headerRow);
+
+    // top 5 data rows
+    const dataRows = rawData.slice(1, 6);
+    dataRows.forEach((row, rIdx) => {
+      const tr = document.createElement('tr');
+      row.forEach(cell => {
+        const td = document.createElement('td');
+        td.textContent = cell || '';
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
     });
 
-    function previewData(data, tableId, showNumbers=false){
-      const table = document.getElementById(tableId);
-      table.innerHTML = "";
-      if(!data || data.length === 0) return;
+    inputPreview.appendChild(table);
+  }
 
-      if(showNumbers){
-        const numberRow = document.createElement("tr");
-        data[0].forEach((_, idx)=> {
-          const th = document.createElement("th");
-          th.textContent = idx+1;
-          numberRow.appendChild(th);
-        });
-        table.appendChild(numberRow);
-      }
+  // --- parse user ranges like "1:3" or "4:n"
+  function parseRange(value){
+    if (!value || typeof value !== 'string') return null;
+    const parts = value.split(':').map(s => s.trim());
+    if (parts.length !== 2) return null;
+    const start = parseInt(parts[0], 10);
+    if (isNaN(start) || start < 1) return null;
+    let end;
+    if (parts[1].toLowerCase() === 'n') end = rawData[0].length;
+    else {
+      end = parseInt(parts[1], 10);
+      if (isNaN(end) || end < start) return null;
+    }
+    // convert to 0-indexed inclusive
+    return { start: start - 1, end: end - 1 };
+  }
 
-      const headerRow = document.createElement("tr");
-      data[0].forEach((val)=> {
-        const th = document.createElement("th");
-        th.textContent = val || "";
-        headerRow.appendChild(th);
-      });
-      table.appendChild(headerRow);
+  // --- categorize item (normalized)
+  function categorizeItem(itemRaw) {
+    const item = (itemRaw || '').toString().trim().toLowerCase();
+    if (!item) return '';
+    if (/(^|\s|\/)atta($|\s|,|\.)|maida|semolina/i.test(item)) return 'Flour';
+    if (item.includes('lentil')) return 'Lentil';
+    if (item.includes('mustard oil')) return 'Mustard Oil';
+    if (item.includes('puffed rice')) return 'Puffed Rice';
+    if (/rice chinigura|rice others/.test(item)) return 'Rice';
+    if (item.includes('salt')) return 'Salt';
+    return '';
+  }
 
-      data.slice(1,6).forEach(row => {
-        const tr = document.createElement("tr");
-        row.forEach(cell => {
-          const td = document.createElement("td");
-          td.textContent = cell || "";
-          tr.appendChild(td);
-        });
-        table.appendChild(tr);
-      });
+  // --- process -> unpivot
+  function processData() {
+    clearStatus();
+    if (!rawData || rawData.length < 2) { showError('Load a file with at least one header and one data row.'); return; }
+
+    const fixedRange = parseRange(fixedColumnsInput.value);
+    if (!fixedRange) { showError('Invalid fixed columns range (use start:end, e.g., 1:3).'); return; }
+
+    const repeatRange = parseRange(repeatRangeInput.value);
+    if (!repeatRange) { showError('Invalid repeat columns range (use start:end and ensure within column count).'); return; }
+
+    const groupSize = parseInt(repeatSizeInput.value, 10);
+    if (!groupSize || groupSize < 1) { showError('Invalid repeat group size.'); return; }
+
+    // basic bounds check
+    if (fixedRange.end >= rawData[0].length || repeatRange.end >= rawData[0].length) {
+      showError('Range exceeds number of columns in the file.');
+      return;
+    }
+    // ensure ranges don't overlap wrongly
+    if (repeatRange.start <= fixedRange.end) {
+      // it's allowed if user intentionally overlaps, but warn
+      // we'll still run; user requested it.
     }
 
-    function parseRange(range){
-      const parts = range.split(":");
-      if(parts.length!==2) return null;
-      const start = parseInt(parts[0])-1;
-      const end = parts[1].trim().toLowerCase()==="n" ? rawData[0].length-1 : parseInt(parts[1])-1;
-      return {start,end};
+    const renameParts = (repeatRenameInput.value || '').split(',').map(s => s.trim()).filter(s => s);
+    const addCategory = addCategoryCheckbox.checked;
+
+    // Build headers
+    const headers = [];
+    // include fixed headers from first row
+    for (let c = fixedRange.start; c <= fixedRange.end; c++) headers.push(rawData[0][c] || `Col${c+1}`);
+    // repeated headers
+    for (let i = 0; i < groupSize; i++) {
+      headers.push(renameParts[i] || `Group${i+1}`);
     }
+    if (addCategory) headers.push('Category');
 
-    function categorizeItem(item) {
-      let category = '';
-      if (/atta|maida|semolina/i.test(item)) {
-        category = 'Flour';
-      } else if (/lentil/i.test(item)) {
-        category = 'Lentil';
-      } else if (/mustard oil/i.test(item)) {
-        category = 'Mustard Oil';
-      } else if (/puffed rice/i.test(item)) {
-        category = 'Puffed Rice';
-      } else if (/rice chinigura|rice others/i.test(item)) {
-        category = 'Rice';
-      } else if (/salt/i.test(item)) {
-        category = 'Salt';
-      }
-      return category;
-    }
+    // Build processed rows
+    processedData = [];
+    processedData.push(headers);
 
-    function processData(){
-      const fixedColumns = parseRange(fixedColumnsInput.value);
-      if(!fixedColumns){status.textContent="Invalid fixed column range."; return;}
+    // iterate each data row (skip header)
+    for (let r = 1; r < rawData.length; r++) {
+      const row = rawData[r];
+      // ensure row has length rawData[0].length
+      const normalizedRow = Array.from({length: rawData[0].length}, (_, i) => (row[i] === undefined || row[i] === null) ? '' : row[i]);
 
-      const repeatGroupSize = parseInt(repeatSizeInput.value);
-      if(!repeatGroupSize || repeatGroupSize<1){status.textContent="Invalid repeat group size."; return;}
+      const fixedPart = normalizedRow.slice(fixedRange.start, fixedRange.end + 1);
 
-      const repeatColumns = parseRange(repeatRangeInput.value);
-      if(!repeatColumns){status.textContent="Invalid repeat columns range."; return;}
+      for (let c = repeatRange.start; c <= repeatRange.end; c += groupSize) {
+        const group = normalizedRow.slice(c, c + groupSize);
+        // skip group if empty (all blank)
+        const hasValue = group.some(v => String(v).trim() !== '');
+        if (!hasValue) continue;
 
-      const renameCols = repeatRenameInput.value.split(",").map(s=>s.trim()).filter(s=>s);
-      const addCategory = addCategoryInput.checked;
+        // ensure group length equals groupSize (pad with empty strings)
+        const groupPadded = Array.from({length: groupSize}, (_, i) => (group[i] === undefined ? '' : group[i]));
 
-      processedData = [];
-      const headers = [...rawData[0].slice(fixedColumns.start,fixedColumns.end+1)];
-      for(let i=0;i<repeatGroupSize;i++){
-        headers.push(renameCols[i]||`Group${i+1}`);
-      }
-      if (addCategory) headers.push("Category");
-      processedData.push(headers);
+        const outRow = [...fixedPart, ...groupPadded];
 
-      rawData.slice(1).forEach(row=>{
-        const fixedPart = row.slice(fixedColumns.start,fixedColumns.end+1);
-
-        for(let i=repeatColumns.start;i<=repeatColumns.end;i+=repeatGroupSize){
-          const group = row.slice(i,i+repeatGroupSize);
-          if(group.length===0 || group.every(v=>v==="")) continue;
-
-          let rowOut = [...fixedPart,...group];
-          if (addCategory) {
-            const item = group[0] || "";
-            rowOut.push(categorizeItem(item));
-          }
-          processedData.push(rowOut);
+        if (addCategory) {
+          const itemCell = (groupPadded[0] === undefined ? '' : groupPadded[0]);
+          outRow.push(categorizeItem(itemCell));
         }
+
+        processedData.push(outRow);
+      }
+    }
+
+    // preview top 5
+    renderOutputPreview();
+    outputSummary.textContent = `Output: ${Math.max(0, processedData.length - 1)} rows × ${processedData[0].length} columns (excluding header).`;
+    downloadX.disabled = false;
+    downloadC.disabled = false;
+    status(`${processedData.length - 1} rows produced`, 'success');
+  }
+
+  // --- render output preview (top 5)
+  function renderOutputPreview(){
+    outputPreview.innerHTML = '';
+    if (!processedData || processedData.length === 0) return;
+    const table = document.createElement('table');
+    // header
+    const headerRow = document.createElement('tr');
+    processedData[0].forEach(h => {
+      const th = document.createElement('th'); th.textContent = h || ''; headerRow.appendChild(th);
+    });
+    table.appendChild(headerRow);
+    // first 5 rows
+    processedData.slice(1, 6).forEach(row => {
+      const tr = document.createElement('tr');
+      row.forEach(cell => {
+        const td = document.createElement('td'); td.textContent = cell || ''; tr.appendChild(td);
       });
+      table.appendChild(tr);
+    });
+    outputPreview.appendChild(table);
+  }
 
-      previewData(processedData,"outputPreview",false);
-      summary.textContent = `Output: ${processedData.length-1} rows × ${processedData[0].length} columns (excluding header).`;
-      document.getElementById("downloadExcelBtn").disabled=false;
-      document.getElementById("downloadCsvBtn").disabled=false;
-      status.textContent="Processed successfully!";
-    }
+  // --- downloads
+  downloadX.addEventListener('click', () => {
+    if (!processedData) return;
+    const ws = XLSX.utils.aoa_to_sheet(processedData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Processed');
+    XLSX.writeFile(wb, 'processed_data.xlsx');
+  });
 
-    function downloadExcel(){
-      const ws = XLSX.utils.aoa_to_sheet(processedData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Processed");
-      XLSX.writeFile(wb,"processed_data.xlsx");
-    }
+  downloadC.addEventListener('click', () => {
+    if (!processedData) return;
+    // proper escaping of quotes by doubling them
+    const csv = processedData.map(row => row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'processed_data.csv';
+    link.click();
+  });
 
-    function downloadCSV(){
-      const csv = processedData.map(r=>r.map(v=>`"${(v||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
-      const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"});
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download="processed_data.csv";
-      link.click();
-    }
+  // --- helpers
+  function showError(msg) { statusEl.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`; }
+  function status(msg, type='') { statusEl.innerHTML = `<span class="${type==='success' ? 'success':''}">${escapeHtml(msg)}</span>`; }
+  function clearStatus(){ statusEl.innerHTML = ''; }
+  function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // --- init: wire process button
+  processBtn.addEventListener('click', processData);
+
   </script>
 </body>
 </html>
