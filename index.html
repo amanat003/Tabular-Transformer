@@ -172,18 +172,38 @@
     }
   }
 
-  // --- category
   function categorizeItem(itemRaw) {
-    const item = (itemRaw || '').toString().trim().toLowerCase();
-    if (!item) return '';
-    if (/(^|\s|\/)Atta($|\s|,|\.)|Maida|Semolina/.test(item)) return 'Flour';
-    if (item.includes('Lentil')) return 'Lentil';
-    if (item.includes('Mustard oil')) return 'Mustard Oil';
-    if (item.includes('Puffed rice')) return 'Puffed Rice';
-    if (/Rice chinigura|Rice others/.test(item)) return 'Rice';
-    if (item.includes('Salt')) return 'Salt';
-    return '';
+  // normalize to a simpler string
+  const raw = (itemRaw ?? "").toString();
+  const s = raw
+    .normalize('NFKD')                // remove diacritics
+    .replace(/[\u0300-\u036f]/g, '')  // remove combine accents
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201c\u201d]/g, "'") // normalize smart quotes
+    .replace(/[^a-z0-9\s]/g, ' ')     // remove punctuation (keep letters/numbers/spaces)
+    .replace(/\s+/g, ' ')             // collapse spaces
+    .trim();
+
+  if (!s) return '';
+
+  // ordered list of patterns (specific -> general)
+  const patterns = [
+    { re: /\b(chinigura|chinigura rice)\b/, cat: 'Rice' },
+    { re: /\b(rice chinigura|rice others)\b/, cat: 'Rice' },
+    { re: /\b(puffed\s*rice|muri|muri\s+rice)\b/, cat: 'Puffed Rice' },
+    { re: /\b(mustard\s*oil|mustard\s*seed\s*oil)\b/, cat: 'Mustard Oil' },
+    { re: /\b(atta|maida|semolina|suji|rava|flour)\b/, cat: 'Flour' },
+    { re: /\b(lentil|dal|masoor|moong|chana|lentils)\b/, cat: 'Lentil' },
+    { re: /\b(salt|iodized\s*salt|table\s*salt)\b/, cat: 'Salt' },
+    // add more rules here as needed
+  ];
+
+  for (const p of patterns) {
+    if (p.re.test(s)) return p.cat;
+   }
+  return '';
   }
+
 
   // --- file parsing
   function handleFile(file){
