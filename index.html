@@ -71,10 +71,13 @@
       </div>
 
       <div style="min-width:220px">
-        <label style="display:block">&nbsp;</label>
         <div>
           <input id="addCategory" type="checkbox" disabled />
           <label for="addCategory" style="font-weight:600">Add category column</label>
+        </div>
+        <div id="categorySourceWrap" style="margin-top:6px; display:none">
+          <label for="categorySource">Category source column</label><br>
+          <select id="categorySource" class="small"></select>
         </div>
       </div>
     </div>
@@ -106,6 +109,8 @@
   const repeatRangeInput = document.getElementById('repeatRange');
   const repeatRenameInput = document.getElementById('repeatRename');
   const addCategoryCheckbox = document.getElementById('addCategory');
+  const categorySourceWrap = document.getElementById('categorySourceWrap');
+  const categorySourceSelect = document.getElementById('categorySource');
   const processBtn = document.getElementById('processBtn');
   const downloadX = document.getElementById('downloadX');
   const downloadC = document.getElementById('downloadC');
@@ -115,7 +120,6 @@
   const statusEl = document.getElementById('status');
   const outputSummary = document.getElementById('outputSummary');
 
-  // --- drag & drop
   ;['dragenter','dragover'].forEach(evt => {
     dropZone.addEventListener(evt, e => {
       e.preventDefault(); e.stopPropagation();
@@ -133,82 +137,16 @@
     if (f) handleFile(f);
   });
   dropZone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', e => {
+  fileInput.addEventListener('change', (e) => {
     const f = e.target.files && e.target.files[0];
     if (f) handleFile(f);
   });
 
-  // --- parse helpers
-  function parseRanges(value) {
-    if (!value) return null;
-    return value.split(',').map(part => {
-      part = part.trim();
-      if (!part) return null;
-      if (part.includes(':')) {
-        let [s, e] = part.split(':');
-        let start = parseInt(s, 10);
-        let end = (e.toLowerCase() === 'n') ? rawData[0].length : parseInt(e, 10);
-        if (isNaN(start) || isNaN(end)) return null;
-        return { start: start - 1, end: end - 1 };
-      } else {
-        let idx = parseInt(part, 10);
-        if (isNaN(idx)) return null;
-        return { start: idx - 1, end: idx - 1 };
-      }
-    }).filter(r => r);
-  }
-  function parseRange(value) {
-    if (!value) return null;
-    if (value.includes(':')) {
-      let [s, e] = value.split(':');
-      let start = parseInt(s, 10);
-      let end = (e.toLowerCase() === 'n') ? rawData[0].length : parseInt(e, 10);
-      if (isNaN(start) || isNaN(end)) return null;
-      return { start: start - 1, end: end - 1 };
-    } else {
-      let idx = parseInt(value, 10);
-      if (isNaN(idx)) return null;
-      return { start: idx - 1, end: idx - 1 };
-    }
-  }
-
-  function categorizeItem(itemRaw) {
-  // normalize to a simpler string
-  const raw = (itemRaw ?? "").toString();
-  const s = raw
-    .normalize('NFKD')                // remove diacritics
-    .replace(/[\u0300-\u036f]/g, '')  // remove combine accents
-    .toLowerCase()
-    .replace(/[\u2018\u2019\u201c\u201d]/g, "'") // normalize smart quotes
-    .replace(/[^a-z0-9\s]/g, ' ')     // remove punctuation (keep letters/numbers/spaces)
-    .replace(/\s+/g, ' ')             // collapse spaces
-    .trim();
-
-  if (!s) return '';
-
-  // ordered list of patterns (specific -> general)
-  const patterns = [
-    { re: /\b(chinigura|chinigura rice)\b/, cat: 'Rice' },
-    { re: /\b(rice chinigura|rice others)\b/, cat: 'Rice' },
-    { re: /\b(puffed\s*rice|muri|muri\s+rice)\b/, cat: 'Puffed Rice' },
-    { re: /\b(mustard\s*oil|mustard\s*seed\s*oil)\b/, cat: 'Mustard Oil' },
-    { re: /\b(atta|maida|semolina|suji|rava|flour)\b/, cat: 'Flour' },
-    { re: /\b(lentil|dal|masoor|moong|chana|lentils)\b/, cat: 'Lentil' },
-    { re: /\b(salt|iodized\s*salt|table\s*salt)\b/, cat: 'Salt' },
-    // add more rules here as needed
-  ];
-
-  for (const p of patterns) {
-    if (p.re.test(s)) return p.cat;
-   }
-  return '';
-  }
-
-
-  // --- file parsing
   function handleFile(file){
     clearStatus();
-    const ext = file.name.split('.').pop().toLowerCase();
+    const name = file.name || 'file';
+    const ext = name.split('.').pop().toLowerCase();
+
     const reader = new FileReader();
     reader.onerror = () => showError('Unable to read file.');
     reader.onload = (ev) => {
@@ -219,11 +157,13 @@
         } else {
           wb = XLSX.read(ev.target.result, { type: 'binary' });
         }
-        const ws = wb.Sheets[wb.SheetNames[1]];
+        const ws = wb.Sheets[wb.SheetNames[0]];
         const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
-        const normalized = aoa.map(r => r.map(c => c ?? ''));
+        const normalized = aoa.map(r => r.map(c => c === undefined || c === null ? '' : c));
         rawData = normalized.filter(r => r.some(c => String(c).trim() !== ''));
-        if (!rawData || rawData.length === 0) { showError('No data found.'); return; }
+        if (!rawData || rawData.length === 0) {
+          showError('No data found in the file.'); return;
+        }
 
         fixedColumnsInput.disabled = false;
         repeatSizeInput.disabled = false;
@@ -233,111 +173,199 @@
         processBtn.disabled = false;
 
         const cols = rawData[0].length;
-        fixedColumnsInput.value = '1:3';
+        fixedColumnsInput.value = cols <= 3 ? `1:${Math.max(1, cols-1)}` : '1:3';
         repeatSizeInput.value = 3;
         repeatRangeInput.value = `${Math.min(4, cols)}:n`;
+        repeatRenameInput.value = '';
 
         renderInputPreview();
-        inputSummary.textContent = `Input: ${rawData.length-1} rows × ${cols} columns (excluding header).`;
-        status(`${file.name} loaded`,'success');
-        outputPreview.innerHTML = ''; outputSummary.textContent = '';
-        downloadX.disabled = true; downloadC.disabled = true;
-      } catch(err){ console.error(err); showError('Failed to parse file.'); }
+        inputSummary.textContent = `Input: ${Math.max(0, rawData.length - 1)} rows × ${rawData[0].length} columns (excluding header).`;
+        status(`${file.name} loaded`, 'success');
+        outputPreview.innerHTML = '';
+        outputSummary.textContent = '';
+        downloadX.disabled = true;
+        downloadC.disabled = true;
+      } catch (err) {
+        console.error(err);
+        showError('Failed to parse file.');
+      }
     };
     if (ext === 'csv' || ext === 'txt') reader.readAsText(file);
     else reader.readAsBinaryString(file);
   }
 
-  // --- input preview
   function renderInputPreview(){
-    inputPreview.innerHTML='';
-    if (!rawData) return;
-    const table=document.createElement('table');
-    const numberRow=document.createElement('tr');
-    rawData[0].forEach((_,i)=>{const th=document.createElement('th');th.textContent=i+1;numberRow.appendChild(th);});
+    inputPreview.innerHTML = '';
+    if (!rawData || rawData.length === 0) return;
+    const table = document.createElement('table');
+
+    const numberRow = document.createElement('tr');
+    rawData[0].forEach((_, i) => {
+      const th = document.createElement('th'); th.textContent = i+1; numberRow.appendChild(th);
+    });
     table.appendChild(numberRow);
-    const headerRow=document.createElement('tr');
-    rawData[0].forEach(h=>{const th=document.createElement('th');th.textContent=h;headerRow.appendChild(th);});
+
+    const headerRow = document.createElement('tr');
+    rawData[0].forEach(h => {
+      const th = document.createElement('th'); th.textContent = h || ''; headerRow.appendChild(th);
+    });
     table.appendChild(headerRow);
-    rawData.slice(1,6).forEach(r=>{
-      const tr=document.createElement('tr');
-      r.forEach(c=>{const td=document.createElement('td');td.textContent=c;tr.appendChild(td);});
+
+    rawData.slice(1, 6).forEach(row => {
+      const tr = document.createElement('tr');
+      row.forEach(cell => { const td = document.createElement('td'); td.textContent = cell || ''; tr.appendChild(td); });
       table.appendChild(tr);
     });
+
     inputPreview.appendChild(table);
   }
 
-  // --- process
-  function processData(){
+  function parseRanges(value) {
+    if (!value) return null;
+    return value.split(',').map(part => {
+      part = part.trim();
+      if (!part) return null;
+      if (part.includes(':')) {
+        let [s,e] = part.split(':');
+        let start = parseInt(s,10);
+        let end = (e.toLowerCase()==='n') ? rawData[0].length : parseInt(e,10);
+        if (isNaN(start)||isNaN(end)) return null;
+        return {start:start-1,end:end-1};
+      } else {
+        let idx=parseInt(part,10);
+        if(isNaN(idx)) return null;
+        return {start:idx-1,end:idx-1};
+      }
+    }).filter(r=>r);
+  }
+
+  function parseRange(value) {
+    if (!value) return null;
+    let [s,e]=value.split(':');
+    let start=parseInt(s,10);
+    let end=(e.toLowerCase()==='n')?rawData[0].length:parseInt(e,10);
+    if(isNaN(start)||isNaN(end)) return null;
+    return {start:start-1,end:end-1};
+  }
+
+  function categorizeItem(itemRaw) {
+    const item=(itemRaw||'').toString().trim().toLowerCase();
+    if(!item) return '';
+    if(/(^|\s|\/)atta($|\s|,|\.)|maida|semolina/.test(item)) return 'Flour';
+    if(item.includes('lentil')) return 'Lentil';
+    if(item.includes('mustard oil')) return 'Mustard Oil';
+    if(item.includes('puffed rice')) return 'Puffed Rice';
+    if(/rice chinigura|rice others/.test(item)) return 'Rice';
+    if(item.includes('salt')) return 'Salt';
+    return '';
+  }
+
+  function updateCategorySourceOptions(groupSize) {
+    categorySourceSelect.innerHTML = '';
+    const renameParts=(repeatRenameInput.value||'').split(',').map(s=>s.trim());
+    for(let i=0;i<groupSize;i++){
+      const opt=document.createElement('option');
+      opt.value=i;
+      const label=renameParts[i]||`Group${i+1}`;
+      opt.textContent=label;
+      if(i===1) opt.selected=true;
+      categorySourceSelect.appendChild(opt);
+    }
+  }
+
+  function processData() {
     clearStatus();
-    if (!rawData || rawData.length<2){showError('Load a file first.');return;}
+    if (!rawData || rawData.length<2){showError('Load a file.');return;}
+
     const fixedRanges=parseRanges(fixedColumnsInput.value);
+    if(!fixedRanges||fixedRanges.length===0){showError('Invalid fixed ranges');return;}
     const repeatRange=parseRange(repeatRangeInput.value);
+    if(!repeatRange){showError('Invalid repeat range');return;}
     const groupSize=parseInt(repeatSizeInput.value,10);
-    if (!fixedRanges || !repeatRange || !groupSize){showError('Invalid ranges.');return;}
+    if(!groupSize||groupSize<1){showError('Invalid group size');return;}
 
     const renameParts=(repeatRenameInput.value||'').split(',').map(s=>s.trim()).filter(s=>s);
     const addCategory=addCategoryCheckbox.checked;
+    if(addCategory){
+      updateCategorySourceOptions(groupSize);
+      categorySourceWrap.style.display='block';
+    } else {
+      categorySourceWrap.style.display='none';
+    }
+    const categorySourceIndex=parseInt(categorySourceSelect.value||"1",10);
 
     const headers=[];
-    fixedRanges.forEach(r=>{for(let c=r.start;c<=r.end;c++){headers.push(rawData[0][c]||`Col${c+1}`);}});
-    for (let i=0;i<groupSize;i++){headers.push(renameParts[i]||`Group${i+1}`);}
-    if (addCategory) headers.push('Category');
+    fixedRanges.forEach(range=>{
+      for(let c=range.start;c<=range.end;c++) headers.push(rawData[0][c]||`Col${c+1}`);
+    });
+    for(let i=0;i<groupSize;i++){ headers.push(renameParts[i]||`Group${i+1}`); }
+    if(addCategory) headers.push('Category');
 
-    processedData=[headers];
-    for (let r=1;r<rawData.length;r++){
+    processedData=[]; processedData.push(headers);
+
+    for(let r=1;r<rawData.length;r++){
       const row=rawData[r];
-      const normalizedRow=Array.from({length:rawData[0].length},(_,i)=>row[i]??'');
+      const normalizedRow=Array.from({length:rawData[0].length},(_,i)=>(row[i]===undefined||row[i]===null)?'':row[i]);
+
       const fixedPart=[];
-      fixedRanges.forEach(fr=>{for(let c=fr.start;c<=fr.end;c++){fixedPart.push(normalizedRow[c]);}});
-      for (let c=repeatRange.start;c<=repeatRange.end;c+=groupSize){
+      fixedRanges.forEach(range=>{
+        for(let c=range.start;c<=range.end;c++) fixedPart.push(normalizedRow[c]);
+      });
+
+      for(let c=repeatRange.start;c<=repeatRange.end;c+=groupSize){
         const group=normalizedRow.slice(c,c+groupSize);
-        if (!group.some(v=>String(v).trim()!=='')) continue;
-        const groupPadded=Array.from({length:groupSize},(_,i)=>group[i]??'');
+        if(!group.some(v=>String(v).trim()!=='')) continue;
+        const groupPadded=Array.from({length:groupSize},(_,i)=>(group[i]===undefined?'':group[i]));
         const outRow=[...fixedPart,...groupPadded];
-        if (addCategory) outRow.push(categorizeItem(groupPadded[0]));
+        if(addCategory){
+          const itemCell=groupPadded[categorySourceIndex]||'';
+          outRow.push(categorizeItem(itemCell));
+        }
         processedData.push(outRow);
       }
     }
+
     renderOutputPreview();
-    outputSummary.textContent=`Output: ${processedData.length-1} rows × ${processedData[0].length} columns (excluding header).`;
+    outputSummary.textContent=`Output: ${Math.max(0,processedData.length-1)} rows × ${processedData[0].length} columns (excluding header).`;
     downloadX.disabled=false; downloadC.disabled=false;
     status(`${processedData.length-1} rows produced`,'success');
   }
 
   function renderOutputPreview(){
     outputPreview.innerHTML='';
-    if (!processedData) return;
+    if(!processedData||processedData.length===0)return;
     const table=document.createElement('table');
     const headerRow=document.createElement('tr');
-    processedData[0].forEach(h=>{const th=document.createElement('th');th.textContent=h;headerRow.appendChild(th);});
+    processedData[0].forEach(h=>{const th=document.createElement('th');th.textContent=h||'';headerRow.appendChild(th);});
     table.appendChild(headerRow);
-    processedData.slice(1,6).forEach(r=>{
+    processedData.slice(1,6).forEach(row=>{
       const tr=document.createElement('tr');
-      r.forEach(c=>{const td=document.createElement('td');td.textContent=c;tr.appendChild(td);});
+      row.forEach(cell=>{const td=document.createElement('td');td.textContent=cell||'';tr.appendChild(td);});
       table.appendChild(tr);
     });
     outputPreview.appendChild(table);
   }
 
-  // --- downloads
   downloadX.addEventListener('click',()=>{
+    if(!processedData)return;
     const ws=XLSX.utils.aoa_to_sheet(processedData);
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'Processed');
     XLSX.writeFile(wb,'processed_data.xlsx');
   });
   downloadC.addEventListener('click',()=>{
-    const csv=processedData.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv'});
+    if(!processedData)return;
+    const csv=processedData.map(row=>row.map(cell=>`"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='processed_data.csv';link.click();
   });
 
   function showError(msg){statusEl.innerHTML=`<span class="error">${msg}</span>`;}
-  function status(msg,type=''){statusEl.innerHTML=`<span class="${type==='success'?'success':''}">${msg}</span>`;}
-  function clearStatus(){statusEl.innerHTML='';}
+  function status(msg,type){statusEl.innerHTML=`<span class="${type||''}">${msg}</span>`;}
+  function clearStatus(){statusEl.textContent='';}
 
   processBtn.addEventListener('click',processData);
+  addCategoryCheckbox.addEventListener('change',()=>{ if(addCategoryCheckbox.checked) updateCategorySourceOptions(parseInt(repeatSizeInput.value||"3",10)); });
   </script>
 </body>
 </html>
