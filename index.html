@@ -219,7 +219,7 @@
         } else {
           wb = XLSX.read(ev.target.result, { type: 'binary' });
         }
-        const ws = wb.Sheets[wb.SheetNames[0]];
+        const ws = wb.Sheets[wb.SheetNames[1]];
         const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
         const normalized = aoa.map(r => r.map(c => c ?? ''));
         rawData = normalized.filter(r => r.some(c => String(c).trim() !== ''));
